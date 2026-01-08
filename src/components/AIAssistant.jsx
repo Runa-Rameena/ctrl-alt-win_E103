@@ -1,390 +1,272 @@
-import React, { useState } from 'react'
-import { getRecommendations, generateSocialMediaPosts } from '../services/openai'
-import { Loader, Zap, Clock, DollarSign, Sparkles, Copy } from 'lucide-react'
+import React, { useState } from 'react';
+import { Sparkles, Send, Loader, TrendingUp, DollarSign, Clock, Zap, Copy } from 'lucide-react';
+import PostScheduler from './PostScheduler';
+import { getAIRecommendations, generateSocialMediaPosts } from '../services/gemini';
 
 export default function AIAssistant() {
-  const [step, setStep] = useState(-1)
-  const [loading, setLoading] = useState(false)
-  const [recommendations, setRecommendations] = useState(null)
-  const [posts, setPosts] = useState(null)
-  const [showPosts, setShowPosts] = useState(false)
-
   const [formData, setFormData] = useState({
-    budget: 5000,
-    time: 3,
     businessType: '',
-    products: '',
-    customers: '',
-    goal: '',
-  })
+    currentRevenue: '',
+    monthlyBudget: '',
+    timeAvailable: '',
+    goals: '',
+    currentChallenges: ''
+  });
 
-  const questions = [
-    {
-      key: 'businessType',
-      label: 'What type of business do you run?',
-      type: 'select',
-      options: ['Handmade crafts', 'Food/Bakery', 'Retail/Fashion', 'Services', 'Agriculture', 'Digital products', 'Other'],
-    },
-    {
-      key: 'products',
-      label: 'What do you sell/offer? (Be specific)',
-      type: 'text',
-      placeholder: 'e.g., Organic honey, Traditional sarees, Web design services',
-    },
-    {
-      key: 'customers',
-      label: 'How many active customers do you have currently?',
-      type: 'select',
-      options: ['Less than 10', '10-50', '50-200', '200-500', '500+'],
-    },
-    {
-      key: 'goal',
-      label: 'What is your main growth goal?',
-      type: 'select',
-      options: ['Increase visibility', 'More sales', 'Build community', 'Expand to new platforms', 'Launch new product'],
-    },
-  ]
+  const [loading, setLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState(null);
+  const [socialMediaPosts, setSocialMediaPosts] = useState([]);
 
-  async function handleGetRecommendations() {
-    if (!formData.businessType || !formData.products || !formData.goal) {
-      alert('Please fill all fields')
-      return
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.businessType || !formData.goals) {
+      alert('Please fill in at least Business Type and Goals');
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
+    
     try {
-      const recs = await getRecommendations(formData)
-      setRecommendations(recs)
-      setStep(questions.length + 1)
+      const aiRecommendations = await getAIRecommendations(formData);
+      setRecommendations(aiRecommendations);
+      
+      const posts = await generateSocialMediaPosts(formData, aiRecommendations);
+      setSocialMediaPosts(posts);
     } catch (error) {
-      alert('Error getting recommendations. Please check your API key and try again.')
-      console.error(error)
+      console.error('Error:', error);
+      alert('Failed to get recommendations. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false)
-  }
+  };
 
-  async function handleGeneratePosts() {
-    setLoading(true)
-    try {
-      const generatedPosts = await generateSocialMediaPosts(formData)
-      setPosts(generatedPosts)
-      setShowPosts(true)
-    } catch (error) {
-      alert('Error generating posts')
-      console.error(error)
-    }
-    setLoading(false)
-  }
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
 
-  function copyToClipboard(text) {
-    navigator.clipboard.writeText(text)
-    alert('Copied to clipboard!')
-  }
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard!');
+  };
 
-  // Step 0: Budget and Time
-  if (step === -1) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
-              Let's Understand Your Constraints
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 py-12 px-4">
+      <div className="max-w-4xl mx-auto">
+        
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Sparkles className="w-12 h-12 text-purple-600" />
+            <h1 className="text-4xl font-bold text-gray-800">AI Business Assistant</h1>
+          </div>
+          <p className="text-lg text-gray-600">
+            Get personalized growth strategies based on your real constraints
+          </p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-xl p-8 mb-8">
+          
+          {/* Business Type */}
+          <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">
+              Business Type <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="businessType"
+              value={formData.businessType}
+              onChange={handleChange}
+              placeholder="e.g., Handmade jewelry, Food cart, Boutique"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+              required
+            />
+          </div>
+
+          {/* Current Revenue */}
+          <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">
+              Current Monthly Revenue
+            </label>
+            <input
+              type="text"
+              name="currentRevenue"
+              value={formData.currentRevenue}
+              onChange={handleChange}
+              placeholder="e.g., ₹50,000 or Just starting"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Monthly Budget */}
+          <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">
+              Monthly Marketing Budget
+            </label>
+            <input
+              type="text"
+              name="monthlyBudget"
+              value={formData.monthlyBudget}
+              onChange={handleChange}
+              placeholder="e.g., ₹5,000 or ₹0"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Time Available */}
+          <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">
+              Time Available per Week
+            </label>
+            <input
+              type="text"
+              name="timeAvailable"
+              value={formData.timeAvailable}
+              onChange={handleChange}
+              placeholder="e.g., 5 hours or 2 hours"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Goals */}
+          <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">
+              Your Goals <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              name="goals"
+              value={formData.goals}
+              onChange={handleChange}
+              placeholder="e.g., Increase sales by 50%, Reach 1000 Instagram followers, Launch online store"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+              rows="3"
+              required
+            />
+          </div>
+
+          {/* Current Challenges */}
+          <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">
+              Current Challenges
+            </label>
+            <textarea
+              name="currentChallenges"
+              value={formData.currentChallenges}
+              onChange={handleChange}
+              placeholder="e.g., No time for marketing, Don't know how to use social media, Limited budget"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+              rows="3"
+            />
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-lg font-bold text-lg hover:from-purple-700 hover:to-pink-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <Loader className="w-6 h-6 animate-spin" />
+                Getting AI Recommendations...
+              </>
+            ) : (
+              <>
+                <Send className="w-6 h-6" />
+                Get AI Recommendations
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* AI Recommendations */}
+        {recommendations && (
+          <div className="bg-white rounded-lg shadow-xl p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <Sparkles className="text-purple-600" />
+              Your Personalized Growth Strategies
             </h2>
 
-            <div className="space-y-6 mb-8">
-              <div>
-                <label className="block text-lg font-semibold text-gray-800 mb-3">
-                  Monthly Marketing Budget: ₹{formData.budget.toLocaleString()}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="50000"
-                  step="1000"
-                  value={formData.budget}
-                  onChange={(e) => setFormData({ ...formData, budget: parseInt(e.target.value) })}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-sm text-gray-600 mt-1">
-                  <span>₹0</span>
-                  <span>₹50,000</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-lg font-semibold text-gray-800 mb-3">
-                  Available Time per Week: {formData.time} hours
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  step="1"
-                  value={formData.time}
-                  onChange={(e) => setFormData({ ...formData, time: parseInt(e.target.value) })}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-sm text-gray-600 mt-1">
-                  <span>1 hour</span>
-                  <span>20 hours</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setStep(0)}
-              className="w-full px-6 py-3 bg-teal-600 text-white rounded-lg font-bold text-lg hover:bg-teal-700"
-            >
-              Next: Tell Us About Your Business →
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Questions
-  if (step < questions.length) {
-    const q = questions[step]
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <div className="mb-6">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-teal-500 h-2 rounded-full transition-all"
-                  style={{ width: `${((step + 1) / (questions.length + 1)) * 100}%` }}
-                ></div>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Question {step + 1} of {questions.length}
-              </p>
-            </div>
-
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">{q.label}</h2>
-
-            {q.type === 'select' ? (
-              <select
-                value={formData[q.key]}
-                onChange={(e) => setFormData({ ...formData, [q.key]: e.target.value })}
-                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500 text-lg"
-              >
-                <option value="">-- Select --</option>
-                {q.options.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                placeholder={q.placeholder}
-                value={formData[q.key]}
-                onChange={(e) => setFormData({ ...formData, [q.key]: e.target.value })}
-                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500 text-lg"
-              />
-            )}
-
-            <div className="flex gap-3 mt-8">
-              <button
-                onClick={() => setStep(step - 1)}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={() => {
-                  if (formData[q.key]) setStep(step + 1)
-                  else alert('Please fill this field')
-                }}
-                className="flex-1 px-4 py-3 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700"
-              >
-                Next →
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Review step
-  if (step === questions.length) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Review Your Details</h2>
-            <div className="bg-gray-50 p-6 rounded-lg mb-6 text-left space-y-2">
-              <p><strong>Business:</strong> {formData.businessType}</p>
-              <p><strong>Products:</strong> {formData.products}</p>
-              <p><strong>Customers:</strong> {formData.customers}</p>
-              <p><strong>Budget:</strong> ₹{formData.budget.toLocaleString()}/month</p>
-              <p><strong>Time:</strong> {formData.time} hours/week</p>
-              <p><strong>Goal:</strong> {formData.goal}</p>
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center gap-3 py-6">
-                <Loader className="animate-spin text-teal-600" size={32} />
-                <p className="text-lg">AI is analyzing your constraints...</p>
-              </div>
-            ) : (
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setStep(step - 1)}
-                  className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
-                >
-                  ← Edit
-                </button>
-                <button
-                  onClick={handleGetRecommendations}
-                  className="flex-1 px-6 py-3 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 flex items-center justify-center gap-2"
-                >
-                  <Sparkles size={20} />
-                  Get AI Recommendations
-                </button>
+            {/* Key Insight */}
+            {recommendations.keyInsight && (
+              <div className="bg-purple-100 border-l-4 border-purple-600 p-4 mb-6">
+                <p className="text-purple-900 font-semibold">💡 Key Insight:</p>
+                <p className="text-purple-800">{recommendations.keyInsight}</p>
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    )
-  }
 
-  // Show social media posts
-  if (showPosts) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-6">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
-            AI-Generated Social Media Posts
-          </h2>
-          <div className="space-y-4 mb-6">
-            {posts?.map((post, idx) => (
-              <div key={idx} className="bg-white rounded-lg shadow-lg p-6">
-                <p className="text-lg mb-3 whitespace-pre-line">{post.post}</p>
-                <p className="text-sm text-gray-600 mb-4">{post.hashtags}</p>
-                <button
-                  onClick={() => copyToClipboard(`${post.post}\n\n${post.hashtags}`)}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
-                >
-                  <Copy size={16} />
-                  Copy Post
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={() => setShowPosts(false)}
-            className="w-full px-6 py-3 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700"
-          >
-            ← Back to Recommendations
-          </button>
-        </div>
-      </div>
-    )
-  }
+            {/* Strategies */}
+            <div className="space-y-6">
+              {recommendations.strategies?.map((strategy, index) => (
+                <div key={index} className="border-2 border-purple-200 rounded-lg p-6 hover:shadow-lg transition">
+                  <h3 className="text-xl font-bold text-gray-800 mb-3">
+                    {index + 1}. {strategy.title}
+                  </h3>
+                  <p className="text-gray-700 mb-4">{strategy.description}</p>
+                  
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-green-600" />
+                      <div>
+                        <p className="text-xs text-gray-500">Cost</p>
+                        <p className="text-sm font-semibold text-gray-800">{strategy.cost}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-blue-600" />
+                      <div>
+                        <p className="text-xs text-gray-500">Time Required</p>
+                        <p className="text-sm font-semibold text-gray-800">{strategy.timeRequired}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-purple-600" />
+                      <div>
+                        <p className="text-xs text-gray-500">Automation</p>
+                        <p className="text-sm font-semibold text-gray-800">{strategy.automationLevel}</p>
+                      </div>
+                    </div>
+                  </div>
 
-  // Show recommendations
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8 text-center">
-          Your AI-Powered Growth Plan
-        </h1>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Clock className="text-blue-500" />
-              Time Required
-            </h3>
-            <p className="text-2xl font-bold text-blue-600">
-  {recommendations?.reduce((sum, r) => {
-    const match = r.timeNeeded.match(/(\d+\.?\d*)\s*hours?/i)
-    const time = match ? parseFloat(match[1]) : 0
-    return sum + time
-  }, 0).toFixed(1)} hours/week
-</p>
-
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <DollarSign className="text-green-500" />
-              Total Cost
-            </h3>
-            <p className="text-2xl font-bold text-green-600">
-              ₹{recommendations?.reduce((sum, r) => {
-                const cost = parseInt(r.cost.replace(/[^0-9]/g, '')) || 0
-                return sum + cost
-              }, 0).toLocaleString()}/month
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4 mb-8">
-          {recommendations?.map((rec, idx) => (
-            <div key={idx} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-teal-500">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800">{rec.action}</h3>
-                  <p className="text-sm text-gray-600">Using: <strong>{rec.tool}</strong></p>
+                  {/* Steps */}
+                  <div>
+                    <p className="font-semibold text-gray-700 mb-2">Action Steps:</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                      {strategy.steps?.map((step, stepIndex) => (
+                        <li key={stepIndex} className="text-gray-700 text-sm">{step}</li>
+                      ))}
+                    </ol>
+                  </div>
                 </div>
-                <span className="text-2xl">{rec.automationLevel}</span>
-              </div>
-
-              <p className="text-gray-700 mb-4">{rec.description}</p>
-
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="bg-blue-50 p-3 rounded">
-                  <p className="text-xs text-gray-600">Time/Week</p>
-                  <p className="font-semibold text-blue-600">{rec.timeNeeded}</p>
-                </div>
-                <div className="bg-green-50 p-3 rounded">
-                  <p className="text-xs text-gray-600">Cost/Month</p>
-                  <p className="font-semibold text-green-600">{rec.cost}</p>
-                </div>
-                <div className="bg-purple-50 p-3 rounded">
-                  <p className="text-xs text-gray-600">Impact</p>
-                  <p className="font-semibold text-purple-600 text-xs">
-                    {rec.whyItMatters.split(' ').slice(0, 3).join(' ')}...
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-sm text-gray-600">
-                <strong>Why:</strong> {rec.whyItMatters}
-              </p>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
-        <div className="flex gap-4">
-          <button
-            onClick={handleGeneratePosts}
-            disabled={loading}
-            className="flex-1 px-6 py-4 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 flex items-center justify-center gap-2"
-          >
-            <Sparkles size={20} />
-            {loading ? 'Generating...' : 'Generate Sample Social Media Posts'}
-          </button>
+        {/* Social Media Posts */}
+        {socialMediaPosts.length > 0 && (
+  <div className="bg-white rounded-lg shadow-xl p-8 mt-8">
+    <h2 className="text-2xl font-bold text-gray-800 mb-6">
+      📱 Social Media Content & Scheduling
+    </h2>
+    <PostScheduler posts={socialMediaPosts} />
+  </div>
+)}
+        {/* Social Media Posts */}
+        {socialMediaPosts.length > 0 && (
+          <div className="bg-white rounded-lg shadow-xl p-8 mt-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">
+              📱 Social Media Content & Scheduling
+            </h2>
+            <PostScheduler posts={socialMediaPosts} />
+          </div>
+        )}
 
-          <button
-            onClick={() => {
-              setStep(-1)
-              setRecommendations(null)
-              setPosts(null)
-            }}
-            className="px-6 py-4 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
-          >
-            Start Over
-          </button>
-        </div>
       </div>
     </div>
-  )
+  );
 }

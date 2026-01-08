@@ -1,249 +1,343 @@
-import React, { useState } from 'react'
-import { createCampaign } from '../../services/api'
-import { ArrowLeft, Sparkles } from 'lucide-react'
-import { improvePitch } from '../../services/openai'
+import { useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
+import { db } from '../../firebase/config'
+import { collection, addDoc } from 'firebase/firestore'
+import { X, Upload, Sparkles } from 'lucide-react'
 
-export default function CreateCampaign({ onBack, onSuccess }) {
-  const [loading, setLoading] = useState(false)
-  const [improvingPitch, setImprovingPitch] = useState(false)
+export default function CreateCampaign({ onClose, onCampaignCreated }) {
+  const { currentUser, userProfile } = useAuth()
   const [formData, setFormData] = useState({
-    businessName: '',
+    title: '',
+    description: '',
+    goal: '',
     category: '',
-    pitch: '',
-    targetAmount: '',
-    supportTypes: ['funding'],
+    duration: '',
+    image: '',
+    rewards: []
   })
+  const [creating, setCreating] = useState(false)
+  const [currentReward, setCurrentReward] = useState({ title: '', amount: '', description: '' })
 
-  async function handleImprovePitch() {
-    if (!formData.pitch) {
-      alert('Please write your pitch first')
-      return
-    }
+  const categories = [
+    'Technology',
+    'Food & Beverage',
+    'Fashion',
+    'Health & Wellness',
+    'Education',
+    'Arts & Crafts',
+    'Social Impact',
+    'Real Estate',
+    'Manufacturing',
+    'Services',
+    'Other'
+  ]
 
-    setImprovingPitch(true)
-    try {
-      const improved = await improvePitch(formData.pitch)
-      setFormData({ ...formData, pitch: improved })
-      alert('Pitch improved! ✨')
-    } catch (error) {
-      console.error('Error improving pitch:', error)
-      alert('Could not improve pitch, but your original looks great!')
-    }
-    setImprovingPitch(false)
+  function handleChange(e) {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }))
   }
 
-  function handleSupportTypeToggle(type) {
-    if (formData.supportTypes.includes(type)) {
-      setFormData({
-        ...formData,
-        supportTypes: formData.supportTypes.filter((t) => t !== type)
-      })
-    } else {
-      setFormData({
-        ...formData,
-        supportTypes: [...formData.supportTypes, type]
-      })
+  function handleAddReward() {
+    if (currentReward.title && currentReward.amount && currentReward.description) {
+      setFormData(prev => ({
+        ...prev,
+        rewards: [...prev.rewards, { ...currentReward, id: Date.now() }]
+      }))
+      setCurrentReward({ title: '', amount: '', description: '' })
     }
+  }
+
+  function handleRemoveReward(id) {
+    setFormData(prev => ({
+      ...prev,
+      rewards: prev.rewards.filter(r => r.id !== id)
+    }))
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
-
-    if (!formData.businessName || !formData.category || !formData.pitch || !formData.targetAmount) {
-      alert('Please fill all required fields')
+    
+    if (!formData.title || !formData.description || !formData.goal || !formData.category || !formData.duration) {
+      alert('❌ Please fill in all required fields')
       return
     }
 
-    if (formData.supportTypes.length === 0) {
-      alert('Please select at least one support type')
-      return
-    }
-
-    setLoading(true)
+    setCreating(true)
+    
     try {
       const campaignData = {
-        ...formData,
-        targetAmount: parseInt(formData.targetAmount),
+        title: formData.title,
+        description: formData.description,
+        goal: Number(formData.goal),
+        raised: 0,
+        backers: 0,
+        category: formData.category,
+        duration: formData.duration,
+        image: formData.image || 'https://via.placeholder.com/800x400/6366f1/ffffff?text=Campaign+Image',
+        rewards: formData.rewards,
+        vendorId: currentUser.uid,
+        vendorName: userProfile?.name || 'Unknown',
+        vendorEmail: userProfile?.email || currentUser.email,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }
 
-      const campaignId = await createCampaign(campaignData)
-      alert('Campaign created successfully! 🎉')
-      onSuccess(campaignId)
+      await addDoc(collection(db, 'campaigns'), campaignData)
+      
+      alert('✅ Campaign created successfully!')
+      onCampaignCreated()
     } catch (error) {
       console.error('Error creating campaign:', error)
-      alert('Error creating campaign. Please try again.')
+      alert('❌ Failed to create campaign. Please try again.')
+    } finally {
+      setCreating(false)
     }
-    setLoading(false)
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-6">
-      <div className="max-w-3xl mx-auto">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-700 hover:text-purple-600 mb-6 font-semibold"
-        >
-          <ArrowLeft size={20} />
-          Back to Campaigns
-        </button>
-
-        <div className="bg-white rounded-lg shadow-xl p-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Launch Your Campaign
-          </h1>
-          <p className="text-gray-600 mb-8">
-            Get support from the community to grow your business
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Business Name *
-              </label>
-              <input
-                type="text"
-                value={formData.businessName}
-                onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                placeholder="e.g., Meena's Handloom Sarees"
-                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Business Category *
-              </label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
-                required
-              >
-                <option value="">-- Select Category --</option>
-                <option value="Handmade crafts">Handmade crafts</option>
-                <option value="Food/Bakery">Food/Bakery</option>
-                <option value="Retail/Fashion">Retail/Fashion</option>
-                <option value="Services">Services</option>
-                <option value="Agriculture">Agriculture</option>
-                <option value="Digital products">Digital products</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Campaign Pitch *
-                </label>
-                <button
-                  type="button"
-                  onClick={handleImprovePitch}
-                  disabled={improvingPitch}
-                  className="flex items-center gap-1 px-3 py-1 text-sm bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 font-semibold"
-                >
-                  <Sparkles size={14} />
-                  {improvingPitch ? 'Improving...' : 'AI Improve'}
-                </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto my-8">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6 text-white sticky top-0 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Sparkles size={32} />
+              <div>
+                <h2 className="text-2xl font-bold">Create New Campaign</h2>
+                <p className="text-sm text-purple-100">Launch your fundraising campaign</p>
               </div>
-              <textarea
-                value={formData.pitch}
-                onChange={(e) => setFormData({ ...formData, pitch: e.target.value })}
-                placeholder="Tell your story... Why do you need support? What will you achieve? How will it help your community?"
-                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
-                rows="6"
-                required
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Tip: Be authentic and specific about your goals
-              </p>
             </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:text-purple-600 rounded-full p-2 transition"
+            >
+              <X size={24} />
+            </button>
+          </div>
+        </div>
 
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Campaign Title */}
+          <div>
+            <label className="block text-sm font-bold text-gray-800 mb-2">
+              Campaign Title <span className="text-red-600">*</span>
+            </label>
+            <input
+              type="text"
+              name="title"
+              value={formData.title}
+              onChange={handleChange}
+              placeholder="e.g., Eco-Friendly Product Launch"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none"
+              required
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-bold text-gray-800 mb-2">
+              Campaign Description <span className="text-red-600">*</span>
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              placeholder="Describe your campaign, what makes it unique, and how the funds will be used..."
+              rows={6}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none resize-none"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.description.length} characters (Minimum 100 recommended)
+            </p>
+          </div>
+
+          {/* Goal and Category Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Funding Goal */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Funding Target Amount (₹) *
+              <label className="block text-sm font-bold text-gray-800 mb-2">
+                Funding Goal (₹) <span className="text-red-600">*</span>
               </label>
               <input
                 type="number"
-                value={formData.targetAmount}
-                onChange={(e) => setFormData({ ...formData, targetAmount: e.target.value })}
-                placeholder="50000"
-                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
-                required
+                name="goal"
+                value={formData.goal}
+                onChange={handleChange}
+                placeholder="e.g., 100000"
                 min="1000"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none"
+                required
               />
+              <p className="text-xs text-gray-500 mt-1">Minimum ₹1,000</p>
             </div>
 
+            {/* Category */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                What support do you need? *
+              <label className="block text-sm font-bold text-gray-800 mb-2">
+                Category <span className="text-red-600">*</span>
               </label>
-              <div className="space-y-3">
-                <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300">
-                  <input
-                    type="checkbox"
-                    checked={formData.supportTypes.includes('funding')}
-                    onChange={() => handleSupportTypeToggle('funding')}
-                    className="mt-1"
-                  />
-                  <div>
-                    <p className="font-semibold text-gray-800">💰 Funding</p>
-                    <p className="text-sm text-gray-600">
-                      Financial support to purchase equipment, inventory, or expand operations
-                    </p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300">
-                  <input
-                    type="checkbox"
-                    checked={formData.supportTypes.includes('skills')}
-                    onChange={() => handleSupportTypeToggle('skills')}
-                    className="mt-1"
-                  />
-                  <div>
-                    <p className="font-semibold text-gray-800">🎨 Skills & Expertise</p>
-                    <p className="text-sm text-gray-600">
-                      Get help from professionals (marketing, design, accounting, etc.)
-                    </p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300">
-                  <input
-                    type="checkbox"
-                    checked={formData.supportTypes.includes('collaboration')}
-                    onChange={() => handleSupportTypeToggle('collaboration')}
-                    className="mt-1"
-                  />
-                  <div>
-                    <p className="font-semibold text-gray-800">🤝 Collaboration</p>
-                    <p className="text-sm text-gray-600">
-                      Partner with other businesses for distribution, joint ventures, etc.
-                    </p>
-                  </div>
-                </label>
-              </div>
+              <select
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none"
+                required
+              >
+                <option value="">Select a category</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
+          </div>
 
-            <div className="flex gap-4">
+          {/* Duration */}
+          <div>
+            <label className="block text-sm font-bold text-gray-800 mb-2">
+              Campaign Duration <span className="text-red-600">*</span>
+            </label>
+            <select
+              name="duration"
+              value={formData.duration}
+              onChange={handleChange}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none"
+              required
+            >
+              <option value="">Select duration</option>
+              <option value="30">30 Days</option>
+              <option value="60">60 Days</option>
+              <option value="90">90 Days</option>
+              <option value="120">120 Days</option>
+            </select>
+          </div>
+
+          {/* Image URL */}
+          <div>
+            <label className="block text-sm font-bold text-gray-800 mb-2">
+              Campaign Image URL (Optional)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                name="image"
+                value={formData.image}
+                onChange={handleChange}
+                placeholder="https://example.com/image.jpg"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none"
+              />
               <button
                 type="button"
-                onClick={onBack}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
+                className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition flex items-center gap-2"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-400"
-              >
-                {loading ? 'Creating...' : 'Launch Campaign 🚀'}
+                <Upload size={20} />
+                Upload
               </button>
             </div>
-          </form>
-        </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Leave blank to use default image. Recommended size: 800x400px
+            </p>
+            {formData.image && (
+              <div className="mt-3">
+                <img
+                  src={formData.image}
+                  alt="Preview"
+                  className="w-full h-48 object-cover rounded-lg"
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/800x400/6366f1/ffffff?text=Invalid+Image+URL'
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Rewards Section */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Rewards (Optional)</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Offer rewards to encourage backers at different funding levels
+            </p>
+
+            {/* Add Reward Form */}
+            <div className="bg-purple-50 rounded-lg p-4 space-y-3 mb-4">
+              <input
+                type="text"
+                value={currentReward.title}
+                onChange={(e) => setCurrentReward(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="Reward Title (e.g., Early Bird Special)"
+                className="w-full px-4 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-600 focus:outline-none"
+              />
+              <input
+                type="number"
+                value={currentReward.amount}
+                onChange={(e) => setCurrentReward(prev => ({ ...prev, amount: e.target.value }))}
+                placeholder="Minimum Amount (₹)"
+                min="100"
+                className="w-full px-4 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-600 focus:outline-none"
+              />
+              <textarea
+                value={currentReward.description}
+                onChange={(e) => setCurrentReward(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Reward Description"
+                rows={2}
+                className="w-full px-4 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-600 focus:outline-none resize-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddReward}
+                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition"
+              >
+                + Add Reward
+              </button>
+            </div>
+
+            {/* Rewards List */}
+            {formData.rewards.length > 0 && (
+              <div className="space-y-3">
+                {formData.rewards.map(reward => (
+                  <div key={reward.id} className="bg-white border-2 border-purple-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-gray-800">{reward.title}</h4>
+                        <p className="text-sm font-semibold text-purple-600 mt-1">₹{reward.amount}+</p>
+                        <p className="text-sm text-gray-600 mt-2">{reward.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveReward(reward.id)}
+                        className="text-red-600 hover:bg-red-50 rounded-full p-2 transition ml-2"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Submit Buttons */}
+          <div className="flex gap-3 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={creating}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creating ? 'Creating Campaign...' : '🚀 Launch Campaign'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )

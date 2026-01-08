@@ -98,12 +98,14 @@ export async function getCampaignById(id) {
 }
 
 // Add support to a campaign
+// Add support to a campaign
 export async function addContribution(campaignId, contributionData) {
   try {
     // Add contribution document
     await addDoc(collection(db, 'contributions'), {
       campaignId,
       ...contributionData,
+      userId: window.currentUserId || 'anonymous', // Track user
       createdAt: serverTimestamp(),
     })
     
